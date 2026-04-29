@@ -1,0 +1,15 @@
+[Unit]
+Description=WiFi Direct P2P Group Owner Service
+After=network.target
+Wants=network.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/home/vitrobiani/Downloads/bina-hardware-main/wpa_supplicant/WiFiDirectAutorun.sh
+ExecStop=/usr/bin/wpa_cli -iwlan0 p2p_group_remove p2p-wlan0-0
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

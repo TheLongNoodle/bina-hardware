@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+# Note: Not using set -e because the monitoring loop should continue even if commands fail
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
 LOG_TAG="WiFiDirect"
@@ -72,4 +72,28 @@ echo "  Network name: Bina-Camera"
 echo "  WPS PIN: 12345678"
 echo "  Pi IP: 192.168.1.2"
 echo "============================================"
+
+# Monitor for client disconnections and re-enable WPS
+# This runs in foreground to keep the service alive
+log "Starting WPS monitor loop..."
+while true; do
+    # Re-enable WPS every 30 seconds to ensure new clients can connect
+    sleep 30
+    if ip link show p2p-wlan0-0 &>/dev/null; then
+        wpa_cli -ip2p-wlan0-0 wps_pin any 12345678 >/dev/null 2>&1 || true
+    else
+        log "P2P interface lost, attempting to recreate..."
+        sudo wpa_cli -iwlan0 p2p_group_add
+        sleep 2
+        if ip link show p2p-wlan0-0 &>/dev/null; then
+            sudo ip addr flush dev p2p-wlan0-0 2>/dev/null || true
+            sudo ip addr add 192.168.1.2/24 dev p2p-wlan0-0
+            sudo ip link set p2p-wlan0-0 up
+            sudo killall dnsmasq 2>/dev/null || true
+            sudo dnsmasq --conf-file=/etc/dnsmasq.d/p2p-wlan0.conf --pid-file=/var/run/dnsmasq-p2p.pid
+            wpa_cli -ip2p-wlan0-0 wps_pin any 12345678 >/dev/null 2>&1 || true
+            log "P2P interface restored"
+        fi
+    fi
+done
 

@@ -1,0 +1,14 @@
+[Unit]
+Description=Motor and Sensor Control API
+After=network.target WiFiDirectAutorun.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/home/bina/bina-hardware/scripts
+ExecStart=/usr/bin/python3 /home/bina/bina-hardware/scripts/control-api.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

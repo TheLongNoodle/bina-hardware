@@ -156,9 +156,9 @@ lgpio.gpio_claim_output(h, EN)
 # Disable driver at startup to save power (EN is active LOW)
 lgpio.gpio_write(h, EN, 1)
 
-STEPS_PER_REV = 190
+STEPS_PER_REV = 1600
 
-MAX_SPEED = 2000   # steps/sec
+MAX_SPEED = 200   # steps/sec
 MIN_SPEED = 200
 ACCEL = 5
 

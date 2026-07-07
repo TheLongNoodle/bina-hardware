@@ -5,7 +5,7 @@ Wants=WiFiDirectAutorun.service
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/python3 /home/vitrobiani/Downloads/bina-hardware-main/scripts/libcamera-streamer.py
+ExecStart=/usr/bin/python3 /home/bina/bina-hardware/scripts/libcamera-streamer.py
 Restart=always
 RestartSec=5
 StandardOutput=journal

@@ -141,6 +141,7 @@ class LIS3DH:
 # Initialize LIS3DH
 mpu = LIS3DH()  # Keep variable name for API compatibility
 led = LED(21)
+led_state = False
 is_moving = False
 STEP = 18
 DIR = 23
@@ -236,11 +237,9 @@ class MotorHandler(BaseHTTPRequestHandler):
         elif self.path == "/":
             self.send_json(200, {"message": "Motor Control API", "endpoints": [
                 "GET  /status        - Motor status",
+                "GET  /led           - Toggle LED on/off",
                 "GET  /gyro          - All IMU sensor data",
                 "GET  /gyro/accel    - Accelerometer (g)",
-                "GET  /gyro/rotation - Gyroscope (deg/s)",
-                "GET  /gyro/mag      - Magnetometer (uT)",
-                "GET  /gyro/temp     - Temperature (C)",
                 "GET  /gyro/orientation - Pitch/Roll",
                 "GET  /gyro/status   - Sensor status",
                 "POST /move {steps, direction}",
@@ -248,7 +247,7 @@ class MotorHandler(BaseHTTPRequestHandler):
                 "POST /stop",
                 "POST /enable",
                 "POST /disable",
-                "POST /led {count}"
+                "POST /led {count}   - Blink LED"
             ]})
         # MPU9250 IMU endpoints
         elif self.path == "/gyro":
@@ -270,6 +269,14 @@ class MotorHandler(BaseHTTPRequestHandler):
             self.send_json(200 if data else 500, data or {"error": "Sensor not available"})
         elif self.path == "/gyro/status":
             self.send_json(200, mpu.get_status())
+        elif self.path == "/led":
+            global led_state
+            led_state = not led_state
+            if led_state:
+                led.on()
+            else:
+                led.off()
+            self.send_json(200, {"led": "on" if led_state else "off"})
         else:
             self.send_json(404, {"error": "Not found"})
 
@@ -324,6 +331,7 @@ if __name__ == "__main__":
     print("Motor Endpoints:")
     print("  GET  /              - API info")
     print("  GET  /status        - Motor status")
+    print("  GET  /led           - Toggle LED on/off")
     print("  POST /move          - Move steps {steps, direction}")
     print("  POST /rotate        - Rotate {revolutions, direction}")
     print("  POST /stop          - Stop motor")

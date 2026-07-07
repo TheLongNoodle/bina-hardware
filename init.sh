@@ -10,7 +10,7 @@ echo "[1/9] Installing required packages..."
 sudo apt-get update
 sudo apt-get install -y dnsmasq wpasupplicant python3-picamera2 python3-simplejpeg python3-smbus i2c-tools
 
-# Enable I2C interface for MPU9250 gyro sensor
+# Enable I2C interface for LIS3DH accelerometer
 echo "[2/9] Enabling I2C interface..."
 sudo raspi-config nonint do_i2c 0
 
@@ -89,4 +89,4 @@ echo "Commands:"
 echo "  Check WiFi:  sudo systemctl status WiFiDirectAutorun.service"
 echo "  Check Camera: sudo systemctl status camera-streamer.service"
 echo "  View logs:   journalctl -u camera-streamer.service -f"
-echo "  Check I2C:   i2cdetect -y 1  (MPU9250 should show at 0x68)"
+echo "  Check I2C:   i2cdetect -y 1  (LIS3DH should show at 0x18 or 0x19)"

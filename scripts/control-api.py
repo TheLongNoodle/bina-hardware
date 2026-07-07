@@ -9,85 +9,59 @@ import math
 PORT = 8071
 
 # =============================================================================
-# MPU9250 IMU Sensor (I2C)
+# LIS3DH Accelerometer Sensor (I2C)
 # =============================================================================
-MPU9250_ADDR = 0x68
-AK8963_ADDR = 0x0C  # Magnetometer
+LIS3DH_ADDR = 0x18  # or 0x19 if SA0 is HIGH
 
-# MPU9250 Registers
-PWR_MGMT_1 = 0x6B
-PWR_MGMT_2 = 0x6C
-GYRO_CONFIG = 0x1B
-ACCEL_CONFIG = 0x1C
-ACCEL_CONFIG2 = 0x1D
-INT_PIN_CFG = 0x37
-ACCEL_XOUT_H = 0x3B
-GYRO_XOUT_H = 0x43
-TEMP_OUT_H = 0x41
-WHO_AM_I = 0x75
+# LIS3DH Registers
+LIS3DH_WHO_AM_I = 0x0F
+LIS3DH_CTRL_REG1 = 0x20
+LIS3DH_CTRL_REG4 = 0x23
+LIS3DH_OUT_X_L = 0x28
 
-# AK8963 Magnetometer Registers
-AK8963_WHO_AM_I = 0x00
-AK8963_CNTL1 = 0x0A
-AK8963_ST1 = 0x02
-AK8963_HXL = 0x03
-
-class MPU9250:
+class LIS3DH:
     def __init__(self, bus_num=1):
         self.bus = None
         self.initialized = False
-        self.gyro_scale = 250.0 / 32768.0  # ±250°/s default
-        self.accel_scale = 2.0 / 32768.0   # ±2g default
-        self.mag_scale = 4912.0 / 32760.0  # μT
-        self.mag_calibration = [1.0, 1.0, 1.0]
+        self.addr = LIS3DH_ADDR
+        self.accel_scale = 2.0 / 32768.0  # ±2g default (16-bit)
 
         try:
             self.bus = smbus2.SMBus(bus_num)
-            self._init_sensor()
-            self.initialized = True
+            # Try default address first, then alternate
+            if not self._try_init(0x18):
+                if not self._try_init(0x19):
+                    print("LIS3DH not found at 0x18 or 0x19")
         except Exception as e:
-            print(f"MPU9250 init failed: {e}")
+            print(f"LIS3DH init failed: {e}")
             self.initialized = False
 
-    def _init_sensor(self):
-        # Wake up MPU9250
-        self.bus.write_byte_data(MPU9250_ADDR, PWR_MGMT_1, 0x00)
-        time.sleep(0.1)
-
-        # Auto select best clock source
-        self.bus.write_byte_data(MPU9250_ADDR, PWR_MGMT_1, 0x01)
-        time.sleep(0.1)
-
-        # Configure gyro: ±250°/s
-        self.bus.write_byte_data(MPU9250_ADDR, GYRO_CONFIG, 0x00)
-
-        # Configure accelerometer: ±2g
-        self.bus.write_byte_data(MPU9250_ADDR, ACCEL_CONFIG, 0x00)
-
-        # Enable bypass mode to access magnetometer directly
-        self.bus.write_byte_data(MPU9250_ADDR, INT_PIN_CFG, 0x02)
-        time.sleep(0.1)
-
-        # Initialize magnetometer (continuous measurement mode, 16-bit)
+    def _try_init(self, addr):
         try:
-            self.bus.write_byte_data(AK8963_ADDR, AK8963_CNTL1, 0x00)
-            time.sleep(0.01)
-            self.bus.write_byte_data(AK8963_ADDR, AK8963_CNTL1, 0x16)  # 16-bit, 100Hz
-            time.sleep(0.1)
+            self.addr = addr
+            device_id = self.bus.read_byte_data(addr, LIS3DH_WHO_AM_I)
+            if device_id == 0x33:  # LIS3DH ID
+                self._init_sensor()
+                self.initialized = True
+                print(f"LIS3DH found at {hex(addr)}")
+                return True
         except:
-            print("Magnetometer init failed (may not be present)")
+            pass
+        return False
 
-    def _read_word(self, addr, reg):
-        high = self.bus.read_byte_data(addr, reg)
-        low = self.bus.read_byte_data(addr, reg + 1)
-        val = (high << 8) | low
-        if val >= 0x8000:
-            val = val - 0x10000
-        return val
+    def _init_sensor(self):
+        # CTRL_REG1: 100Hz, all axes enabled
+        self.bus.write_byte_data(self.addr, LIS3DH_CTRL_REG1, 0x57)
+        time.sleep(0.01)
 
-    def _read_word_le(self, addr, reg):
-        low = self.bus.read_byte_data(addr, reg)
-        high = self.bus.read_byte_data(addr, reg + 1)
+        # CTRL_REG4: ±2g, high resolution mode
+        self.bus.write_byte_data(self.addr, LIS3DH_CTRL_REG4, 0x08)
+        time.sleep(0.01)
+
+    def _read_axis(self, reg_low):
+        # Read with auto-increment (set MSB of register address)
+        low = self.bus.read_byte_data(self.addr, reg_low | 0x80)
+        high = self.bus.read_byte_data(self.addr, (reg_low + 1) | 0x80)
         val = (high << 8) | low
         if val >= 0x8000:
             val = val - 0x10000
@@ -97,7 +71,7 @@ class MPU9250:
         if not self.initialized:
             return None
         try:
-            return self.bus.read_byte_data(MPU9250_ADDR, WHO_AM_I)
+            return self.bus.read_byte_data(self.addr, LIS3DH_WHO_AM_I)
         except:
             return None
 
@@ -105,62 +79,32 @@ class MPU9250:
         if not self.initialized:
             return None
         try:
-            ax = self._read_word(MPU9250_ADDR, ACCEL_XOUT_H) * self.accel_scale
-            ay = self._read_word(MPU9250_ADDR, ACCEL_XOUT_H + 2) * self.accel_scale
-            az = self._read_word(MPU9250_ADDR, ACCEL_XOUT_H + 4) * self.accel_scale
+            ax = self._read_axis(LIS3DH_OUT_X_L) * self.accel_scale
+            ay = self._read_axis(LIS3DH_OUT_X_L + 2) * self.accel_scale
+            az = self._read_axis(LIS3DH_OUT_X_L + 4) * self.accel_scale
             return {"x": round(ax, 4), "y": round(ay, 4), "z": round(az, 4), "unit": "g"}
         except Exception as e:
             return {"error": str(e)}
 
     def read_gyro(self):
-        if not self.initialized:
-            return None
-        try:
-            gx = self._read_word(MPU9250_ADDR, GYRO_XOUT_H) * self.gyro_scale
-            gy = self._read_word(MPU9250_ADDR, GYRO_XOUT_H + 2) * self.gyro_scale
-            gz = self._read_word(MPU9250_ADDR, GYRO_XOUT_H + 4) * self.gyro_scale
-            return {"x": round(gx, 4), "y": round(gy, 4), "z": round(gz, 4), "unit": "deg/s"}
-        except Exception as e:
-            return {"error": str(e)}
+        # LIS3DH has no gyroscope
+        return {"error": "LIS3DH is accelerometer only - no gyroscope"}
 
     def read_mag(self):
-        if not self.initialized:
-            return None
-        try:
-            # Check data ready
-            st1 = self.bus.read_byte_data(AK8963_ADDR, AK8963_ST1)
-            if not (st1 & 0x01):
-                return {"x": 0, "y": 0, "z": 0, "unit": "uT", "ready": False}
-
-            mx = self._read_word_le(AK8963_ADDR, AK8963_HXL) * self.mag_scale
-            my = self._read_word_le(AK8963_ADDR, AK8963_HXL + 2) * self.mag_scale
-            mz = self._read_word_le(AK8963_ADDR, AK8963_HXL + 4) * self.mag_scale
-
-            # Read ST2 to signal data read complete
-            self.bus.read_byte_data(AK8963_ADDR, 0x09)
-
-            return {"x": round(mx, 2), "y": round(my, 2), "z": round(mz, 2), "unit": "uT", "ready": True}
-        except Exception as e:
-            return {"error": str(e)}
+        # LIS3DH has no magnetometer
+        return {"error": "LIS3DH is accelerometer only - no magnetometer"}
 
     def read_temp(self):
-        if not self.initialized:
-            return None
-        try:
-            raw = self._read_word(MPU9250_ADDR, TEMP_OUT_H)
-            temp_c = (raw / 333.87) + 21.0
-            return {"celsius": round(temp_c, 2)}
-        except Exception as e:
-            return {"error": str(e)}
+        # LIS3DH has a temperature sensor but it's relative, not absolute
+        return {"error": "LIS3DH temperature sensor not implemented"}
 
     def read_all(self):
         if not self.initialized:
-            return {"error": "MPU9250 not initialized"}
+            return {"error": "LIS3DH not initialized"}
         return {
             "accelerometer": self.read_accel(),
-            "gyroscope": self.read_gyro(),
-            "magnetometer": self.read_mag(),
-            "temperature": self.read_temp(),
+            "gyroscope": {"note": "Not available on LIS3DH"},
+            "magnetometer": {"note": "Not available on LIS3DH"},
             "timestamp": time.time()
         }
 
@@ -188,14 +132,14 @@ class MPU9250:
         return {
             "initialized": self.initialized,
             "device_id": hex(self.get_device_id()) if self.get_device_id() else None,
-            "expected_id": "0x71 (MPU9250) or 0x73 (MPU9255)",
-            "gyro_range": "±250 deg/s",
+            "expected_id": "0x33 (LIS3DH)",
+            "sensor_type": "Accelerometer only (no gyro/mag)",
             "accel_range": "±2g",
-            "i2c_address": hex(MPU9250_ADDR)
+            "i2c_address": hex(self.addr)
         }
 
-# Initialize MPU9250
-mpu = MPU9250()
+# Initialize LIS3DH
+mpu = LIS3DH()  # Keep variable name for API compatibility
 led = LED(21)
 is_moving = False
 STEP = 18
@@ -208,8 +152,8 @@ lgpio.gpio_claim_output(h, STEP)
 lgpio.gpio_claim_output(h, DIR)
 lgpio.gpio_claim_output(h, EN)
 
-# Enable driver (EN is active LOW)
-lgpio.gpio_write(h, EN, 0)
+# Disable driver at startup to save power (EN is active LOW)
+lgpio.gpio_write(h, EN, 1)
 
 STEPS_PER_REV = 190
 
@@ -228,6 +172,11 @@ def step_pulse(delay):
 def move(steps, direction=1):
     global is_moving
     is_moving = True
+
+    # Enable motor before movement
+    lgpio.gpio_write(h, EN, 0)
+    time.sleep(0.01)  # Small delay for driver to stabilize
+
     lgpio.gpio_write(h, DIR, direction)
 
     speed = MIN_SPEED
@@ -242,6 +191,8 @@ def move(steps, direction=1):
         delay = 1 / (2 * speed)  # half-period
         step_pulse(delay)
 
+    # Disable motor after movement to save power
+    lgpio.gpio_write(h, EN, 1)
     is_moving = False
 
 # Another abstraction allowing us to use revolutions instead
@@ -252,6 +203,7 @@ def rotate(revolutions, direction=1):
 def stop_motor():
     global is_moving
     is_moving = False
+    lgpio.gpio_write(h, EN, 1)  # Disable motor on stop
 
 def disable_motor():
     stop_motor()
@@ -378,15 +330,12 @@ if __name__ == "__main__":
     print("  POST /enable        - Enable motor driver")
     print("  POST /disable       - Disable motor driver")
     print("  POST /led           - Blink LED {count}")
-    print("MPU9250 IMU Endpoints:")
-    print("  GET  /gyro          - All sensor data (accel, gyro, mag, temp)")
+    print("LIS3DH Accelerometer Endpoints:")
+    print("  GET  /gyro          - All sensor data")
     print("  GET  /gyro/accel    - Accelerometer X/Y/Z (g)")
-    print("  GET  /gyro/rotation - Gyroscope X/Y/Z (deg/s)")
-    print("  GET  /gyro/mag      - Magnetometer X/Y/Z (uT)")
-    print("  GET  /gyro/temp     - Temperature (Celsius)")
     print("  GET  /gyro/orientation - Pitch/Roll angles")
     print("  GET  /gyro/status   - Sensor status")
-    print(f"MPU9250 Status: {'Initialized' if mpu.initialized else 'Not connected'}")
+    print(f"LIS3DH Status: {'Initialized' if mpu.initialized else 'Not connected'}")
     server = HTTPServer(("0.0.0.0", PORT), MotorHandler)
     server.serve_forever()
 

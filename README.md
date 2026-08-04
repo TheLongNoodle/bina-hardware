@@ -69,13 +69,24 @@ Address auto-detection is at [`control-api.py#L32`](https://github.com/TheLongNo
 
 ### Wiring diagram
 
-![hardware schema](assets/diagrams/bina_hardware_schematics.png)
+<details>
+<summary>hardware schema</summary>
+
+[//]: # (![hardware schema]&#40;assets/diagrams/bina_hardware_schematics.png&#41;)
+<img src="assets/diagrams/bina_hardware_schematics.png" style="width: 30%; max-width: 250; height: auto;">
+</details>
 
 ## System architecture
 
 ### Component diagram
 
-![componant graph](assets/diagrams/bina_hardware_schematics.png)
+<details>
+<summary>componant graph</summary>
+
+[//]: # (![componant graph]&#40;assets/diagrams/bina_hardware_componant_graph.png&#41;)
+<img src="assets/diagrams/bina_hardware_componant_graph.png" style="width: 40%; max-width: 350; height: auto;">
+
+</details>
 
 ### Network topology
 
@@ -575,4 +586,5 @@ nc 192.168.1.2 5000                  # on your laptop, from inside the P2P netwo
 
 ## The device
 
-![bina_cam_no_bg.png](assets/bina_cam_no_bg.png)
+[//]: # (![bina_cam_no_bg.png]&#40;assets/bina_cam_no_bg.png&#41;)
+<img src="assets/bina_cam_no_bg.png" style="width: 40%; max-width: 350; height: auto;">
